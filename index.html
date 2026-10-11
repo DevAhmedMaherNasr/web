@@ -1,201 +1,62 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>تطبيق البحث في الأسئلة</title>
-  <link rel="manifest" href="data:application/json,{%22name%22:%22منقب%20الأسئلة%22,%22short_name%22:%22الأسئلة%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%23f1f5f9%22,%22theme_color%22:%22%232563eb%22}">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/tesseract.js@v5.0.5/dist/tesseract.min.js"></script>
-  <style>
-    .highlight-mark { background-color: #fef08a; padding: 0 4px; border-radius: 4px; font-weight: bold; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تطبيق الأسئلة والإجابات</title>
+    <style>
+        body { font-family: Tahoma, sans-serif; text-align: center; background: #f0f2f5; padding: 20px; margin: 0; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        input { width: 90%; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; margin-bottom: 10px; }
+        button { padding: 12px 25px; font-size: 16px; background: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer; }
+        button:hover { background: #218838; }
+        .result { margin-top: 20px; }
+        img { max-width: 100%; height: auto; border: 2px solid #ddd; border-radius: 8px; margin-top: 10px; }
+        .error { color: red; font-weight: bold; margin-top: 15px; }
+    </style>
 </head>
-<body class="bg-slate-100 min-h-screen text-slate-800 pb-12">
+<body>
 
-  <!-- Header -->
-  <header class="bg-blue-600 text-white p-4 sticky top-0 z-50 shadow-md">
-    <div class="max-w-xl mx-auto flex justify-between items-center">
-      <h1 class="text-xl font-bold flex items-center gap-2">🔍 بنك الأسئلة والمصورة</h1>
-      <span id="countBadge" class="bg-blue-800 text-xs px-2.5 py-1 rounded-full font-semibold">0 صورة</span>
-    </div>
-  </header>
-
-  <main class="max-w-xl mx-auto p-4 space-y-4">
-
-    <!-- Search Box -->
-    <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-200">
-      <label class="block text-xs text-slate-500 mb-1 font-semibold">ابحث في الأسئلة والأجوبة:</label>
-      <input type="text" id="searchInput" placeholder="اكتب أي كلمة من السؤال أو الإجابة..." 
-             class="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-base">
-    </div>
-
-    <!-- Upload Box -->
-    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-center">
-      <input type="file" id="fileInput" multiple accept="image/*" class="hidden" onchange="handleFiles(this.files)">
-      <button onclick="document.getElementById('fileInput').click()" 
-              class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow transition flex items-center justify-center gap-2">
-        <span>📸 رفع صور الأسئلة (اختر أي عدد)</span>
-      </button>
-      <p id="statusText" class="text-xs text-slate-500 mt-2">يمكنك رفع 500+ صورة وتصفحها أوفلاين</p>
-    </div>
-
-    <!-- Questions Container -->
-    <div id="questionsContainer" class="space-y-4">
-      <!-- Cards will appear here -->
-    </div>
-
-  </main>
-
-  <script>
-    // Database Setup
-    let db;
-    const request = indexedDB.open("QuestionBankDB", 1);
-    request.onupgradeneeded = (e) => {
-      db = e.target.result;
-      if (!db.objectStoreNames.contains("images")) {
-        db.createObjectStore("images", { keyPath: "id" });
-      }
-    };
-    request.onsuccess = (e) => {
-      db = e.target.result;
-      loadAllQuestions();
-    };
-
-    let allQuestions = [];
-
-    // Load Questions
-    function loadAllQuestions() {
-      const tx = db.transaction("images", "readonly");
-      const store = tx.objectStore("images");
-      const req = store.getAll();
-      req.onsuccess = () => {
-        allQuestions = req.result.reverse();
-        document.getElementById("countBadge").innerText = `${allQuestions.length} صورة`;
-        renderQuestions(allQuestions);
-      };
-    }
-
-    // Handle Uploads
-    async function handleFiles(files) {
-      const statusText = document.getElementById("statusText");
-      statusText.innerText = `جاري رفع وحفظ ${files.length} صورة...`;
-
-      for (let file of files) {
-        const id = "img_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4);
-        const base64 = await fileToBase64(file);
+    <div class="container">
+        <h2>البحث عن الأسئلة والإجابات</h2>
+        <p style="color: #666; font-size: 14px;">اكتب جزء من السؤال للبحث عن الصورة المطابقة:</p>
         
-        const item = {
-          id: id,
-          image: base64,
-          text: "",
-          ocrDone: false
-        };
+        <input type="text" id="searchBox" placeholder="اكتب الكلمة أو السؤال هنا...">
+        <br>
+        <button onclick="searchQuestion()">ابحث</button>
 
-        const tx = db.transaction("images", "readwrite");
-        tx.objectStore("images").add(item);
-      }
-      
-      statusText.innerText = "تم حفظ الصور بنجاح! جاري القراءة الآلية (OCR)...";
-      loadAllQuestions();
-      processOCR();
-    }
+        <div class="result" id="resultArea"></div>
+    </div>
 
-    function fileToBase64(file) {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.readAsDataURL(file);
-      });
-    }
+    <script>
+        // هنا قاعدة البيانات: اكتب الكلمة المفتاحية واسم الصورة الخاصة بها
+        const questions = [
+            { keyword: "السؤال الأول", img: "q1.png" },
+            { keyword: "السؤال الثاني", img: "q2.png" },
+            // تقدر تضيف باقي الأسئلة بنفس الشكل هنا تحت بعض:
+            // { keyword: "كلمة من السؤال", img: "اسم_الصورة.jpg" },
+        ];
 
-    // OCR Background Processing
-    async function processOCR() {
-      const pending = allQuestions.filter(q => !q.ocrDone);
-      for (let item of pending) {
-        try {
-          const res = await Tesseract.recognize(item.image, 'ara+eng');
-          item.text = res.data.text;
-          item.ocrDone = true;
+        function searchQuestion() {
+            let query = document.getElementById('searchBox').value.trim().toLowerCase();
+            let resultArea = document.getElementById('resultArea');
+            resultArea.innerHTML = "";
 
-          const tx = db.transaction("images", "readwrite");
-          tx.objectStore("images").put(item);
-          loadAllQuestions();
-        } catch (e) {
-          console.log("OCR Error: ", e);
+            if (!query) {
+                resultArea.innerHTML = "<p class='error'>من فضلك اكتب كلمة للبحث أولاً!</p>";
+                return;
+            }
+
+            // البحث عن مطابقة الكلمة داخل الأسئلة
+            let found = questions.find(q => q.keyword.toLowerCase().includes(query));
+
+            if (found) {
+                resultArea.innerHTML = `<p><strong>نتيجة البحث:</strong></p><img src="${found.img}" alt="صورة الإجابة">`;
+            } else {
+                resultArea.innerHTML = "<p class='error'>عذراً، لم يتم العثور على سؤال مطابق.</p>";
+            }
         }
-      }
-      document.getElementById("statusText").innerText = "اكتمل معالجة جميع الصور!";
-    }
+    </script>
 
-    // Render Cards
-    function renderQuestions(items, query = "") {
-      const container = document.getElementById("questionsContainer");
-      container.innerHTML = "";
-
-      if (items.length === 0) {
-        container.innerHTML = `<div class="text-center text-slate-400 py-10">لا يوجد أسئلة مطابقة للبحث.</div>`;
-        return;
-      }
-
-      items.forEach(item => {
-        const card = document.createElement("div");
-        card.className = "bg-white p-3 rounded-2xl shadow-sm border border-slate-200 space-y-3";
-
-        let textHTML = item.text || "جاري استخراج النص أو يمكنك كتابته يدوياً بالأسفل...";
-        if (query && item.text) {
-          const regex = new RegExp(`(${query})`, 'gi');
-          textHTML = textHTML.replace(regex, '<mark class="highlight-mark">$1</mark>');
-        }
-
-        card.innerHTML = `
-          <div class="overflow-hidden rounded-xl bg-slate-100 border border-slate-200">
-            <img src="${item.image}" class="w-full h-auto max-h-96 object-contain">
-          </div>
-          <div class="bg-slate-50 p-3 rounded-xl text-sm leading-relaxed border border-slate-100">
-            <p class="whitespace-pre-line text-slate-700">${textHTML}</p>
-          </div>
-          <textarea placeholder="تعديل أو كتابة السؤال/الإجابة يدوياً لتسهيل البحث..." 
-                    onchange="updateText('${item.id}', this.value)"
-                    class="w-full p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400">${item.text}</textarea>
-          <button onclick="deleteQuestion('${item.id}')" class="text-xs text-red-500 font-semibold px-2 py-1">حذف الصورة 🗑️</button>
-        `;
-        container.appendChild(card);
-      });
-    }
-
-    // Search Logic
-    document.getElementById("searchInput").addEventListener("input", (e) => {
-      const q = e.target.value.trim().toLowerCase();
-      if (!q) {
-        renderQuestions(allQuestions);
-        return;
-      }
-      const filtered = allQuestions.filter(item => 
-        (item.text && item.text.toLowerCase().includes(q))
-      );
-      renderQuestions(filtered, q);
-    });
-
-    // Update Text Manually
-    function updateText(id, newText) {
-      const item = allQuestions.find(q => q.id === id);
-      if (item) {
-        item.text = newText;
-        item.ocrDone = true;
-        const tx = db.transaction("images", "readwrite");
-        tx.objectStore("images").put(item);
-      }
-    }
-
-    // Delete Question
-    function deleteQuestion(id) {
-      if (confirm("هل أنت تأكد من حذف هذه الصورة؟")) {
-        const tx = db.transaction("images", "readwrite");
-        tx.objectStore("images").delete(id);
-        loadAllQuestions();
-      }
-    }
-  </script>
 </body>
 </html>
